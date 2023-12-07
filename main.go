@@ -67,6 +67,7 @@ func main() {
 func convertSpotifyLink2OpenSpotifyCom(m *discordgo.MessageCreate) string {
 	re, err := regexp.Compile(`http(.*)://(.*)`)
 	if err != nil {
+		fmt.Println("error compiling regex ,", err)
 		return ""
 	}
 	url := re.FindString(m.Content)
@@ -74,11 +75,13 @@ func convertSpotifyLink2OpenSpotifyCom(m *discordgo.MessageCreate) string {
 	client := new(http.Client)
 	resp, err := client.Do(req)
 	if err != nil {
+		fmt.Println("error getting response,", err)
 		return ""
 	}
 	dumpResp, _ := httputil.DumpResponse(resp, true)
 	getSpotifyURL, err := regexp.Compile(`https://open.spotify.com(.*)\?`)
 	if err != nil {
+		fmt.Println("error compiling regex,", err)
 		return ""
 	}
 	spotifyURL := getSpotifyURL.FindString(string(dumpResp))
@@ -89,6 +92,7 @@ func convertSpotifyLink2OpenSpotifyCom(m *discordgo.MessageCreate) string {
 func getSpotifyTrackID(spotifyURL string) string {
 	getIdFromUrl, err := regexp.Compile(`track/(\w+)`)
 	if err != nil {
+		fmt.Println("error compiling regex,", err)
 		return ""
 	}
 	matches := getIdFromUrl.FindStringSubmatch(spotifyURL)
@@ -112,6 +116,7 @@ func getSpotifyTrackData(spotifyTrackID string) (string, string) {
 	}
 	token, err := config.Token(ctx)
 	if err != nil {
+		fmt.Println("error getting token,", err)
 		return "", ""
 	}
 
@@ -120,6 +125,7 @@ func getSpotifyTrackData(spotifyTrackID string) (string, string) {
 
 	results, err := client.GetTrack(context.Background(), spotify.ID(spotifyTrackID))
 	if err != nil {
+		fmt.Println("error getting track,", err)
 		return "", ""
 	}
 	name := results.Name
