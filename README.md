@@ -16,4 +16,5 @@ go build
 ```
 ### Windows
 ```powershell
-.\discordBotGo.exe```
+.\discordBotGo.exe
+```
