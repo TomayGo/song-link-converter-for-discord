@@ -1,10 +1,19 @@
 # Install dependency
-`python -m venv venv`
+```bash
+python -m venv venv
+```/
 Activate venv
-`pip install odesli-cli`
+```bash
+pip install odesli-cli
+```/
 # Build
-`go build`
+```bash
+go build
+```/
 # Run
-`./discordBotGo`
+```bash
+./discordBotGo
+```
 ### Windows
-`.\discordBotGo.exe`
+```powershell
+.\discordBotGo.exe```
