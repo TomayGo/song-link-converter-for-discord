@@ -4,5 +4,5 @@ go build
 ```
 # Run
 ```bash
-./discordBotGo
+./discordBotGo -t <your discord bot's token>
 ```
