@@ -202,12 +202,12 @@ func getYoutubeUrl(spotifyTrackID string) string {
 	}
 	var response Response
 	json.Unmarshal(body, &response)
-	spotifyUrl, ok := response.LinksByPlatform["spotify"]
+	youtubeUrl, ok := response.LinksByPlatform["youtubeMusic"]
 	if !ok {
-		fmt.Println("spotify URL not found")
+		fmt.Println("youtubeMusic URL not found")
 		return ""
 	}
-	postURL := spotifyUrl.Url
+	postURL := youtubeUrl.Url
 	return postURL
 }
 
