@@ -174,13 +174,12 @@ func getSpotifyTrackID(spotifyURL string) string {
 }
 
 func getYoutubeID(m string) string {
-	url := "https://music.youtube.com/watch?v=b5E4Q9_DC5A"
 	re, err := regexp.Compile(`watch\?v=(.*)`)
 	if err != nil {
 		fmt.Println("error compiling regex,", err)
 		return ""
 	}
-	matches := re.FindStringSubmatch(url)
+	matches := re.FindStringSubmatch(m)
 	if len(matches) < 2 {
 		fmt.Println("No match found")
 		return ""
