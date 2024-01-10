@@ -134,6 +134,17 @@ func main() {
 	dg.Close()
 }
 
+func multipleUrl2SingleUrl(m string) []string {
+	reg := "\r\n|\n"
+
+	arr1 := regexp.MustCompile(reg).Split(m, -1)
+
+	for _, s := range arr1 {
+		fmt.Printf("%s\n", s)
+	}
+	return arr1
+}
+
 func convertSpotifyLink2OpenSpotifyCom(m string) string {
 	re, err := regexp.Compile(`http(.*)://(.*)`)
 	if err != nil {
@@ -241,23 +252,27 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
+	msg := multipleUrl2SingleUrl(m.Content)
 	var spotifyURL string
 	var spotifyTrackID string
-	var postURL string
+	var post []string
 
-	if strings.Contains(m.Content, "https://spotify.link") {
-		spotifyURL = convertSpotifyLink2OpenSpotifyCom(m.Content)
-		spotifyTrackID = getSpotifyTrackID(spotifyURL)
-		postURL = getYoutubeUrl(spotifyTrackID)
-	} else if strings.Contains(m.Content, "https://open.spotify.com") {
-		spotifyURL = m.Content
-		spotifyTrackID = getSpotifyTrackID(spotifyURL)
-		postURL = getYoutubeUrl(spotifyTrackID)
-	} else if strings.Contains(m.Content, "https://music.youtube.com/watch") {
-		youtubeID := getYoutubeID(m.Content)
-		postURL = getSpotifyUrl(youtubeID)
+	for _, str := range msg {
+		if strings.Contains(str, "https://spotify.link") {
+			spotifyURL = convertSpotifyLink2OpenSpotifyCom(str)
+			spotifyTrackID = getSpotifyTrackID(spotifyURL)
+			post = append(post, getYoutubeUrl(spotifyTrackID))
+		} else if strings.Contains(str, "https://open.spotify.com") {
+			spotifyURL = str
+			spotifyTrackID = getSpotifyTrackID(spotifyURL)
+			post = append(post, getYoutubeUrl(spotifyTrackID))
+		} else if strings.Contains(str, "https://music.youtube.com/watch") {
+			youtubeID := getYoutubeID(str)
+			post = append(post, getSpotifyUrl(youtubeID))
+		}
 	}
 
-	s.ChannelMessageSend(m.ChannelID, postURL)
+	postmsg := strings.Join(post, "\n")
+	s.ChannelMessageSend(m.ChannelID, postmsg)
 
 }
