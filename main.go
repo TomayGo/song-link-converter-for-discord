@@ -379,7 +379,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		} else if strings.Contains(str, "https://music.youtube.com/watch") {
 			fromyoutube = true
 			youtubeID = getYoutubeID(str)
-		} else if strings.Contains(str, "https://music.amazon.com") {
+		} else if strings.Contains(str, "https://music.amazon") {
 			fromamazon = true
 			trackASIN = getTrackASIN(str)
 		}
