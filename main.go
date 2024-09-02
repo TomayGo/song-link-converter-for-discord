@@ -385,8 +385,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 	}
 
-	fmt.Println(trackASIN)
-
 	if fromspotify {
 		youtubeUrl := getYoutubeUrlFromSpotify(spotifyTrackID)
 		amazonUrl := getAmazonUrlFromSpotify(spotifyTrackID)
