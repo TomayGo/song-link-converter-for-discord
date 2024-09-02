@@ -198,7 +198,7 @@ func getYoutubeID(m string) string {
 }
 
 func getTrackASIN(m string) string {
-	re, err := regexp.Compile(`trackASIN=(.*){10}`)
+	re, err := regexp.Compile(`trackAsin=([A-Z0-9]{10})`)
 	if err != nil {
 		fmt.Println("error compiling regex,", err)
 		return ""
@@ -384,6 +384,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			trackASIN = getTrackASIN(str)
 		}
 	}
+
+	fmt.Println(trackASIN)
 
 	if fromspotify {
 		youtubeUrl := getYoutubeUrlFromSpotify(spotifyTrackID)
