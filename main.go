@@ -197,7 +197,21 @@ func getYoutubeID(m string) string {
 	return matches[1]
 }
 
-func getYoutubeUrl(spotifyTrackID string) string {
+func getTrackASIN(m string) string {
+	re, err := regexp.Compile(`trackASIN=(.*){10}`)
+	if err != nil {
+		fmt.Println("error compiling regex,", err)
+		return ""
+	}
+	matches := re.FindStringSubmatch(m)
+	if len(matches) < 2 {
+		fmt.Println("No match found")
+		return ""
+	}
+	return matches[1]
+}
+
+func getYoutubeUrlFromSpotify(spotifyTrackID string) string {
 	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=spotify&type=song&id=" + spotifyTrackID + "&userCountry=JP&songIfSingle=true")
 	if err != nil {
 		fmt.Println("error getting response,", err)
@@ -220,8 +234,54 @@ func getYoutubeUrl(spotifyTrackID string) string {
 	return postURL
 }
 
-func getSpotifyUrl(youtubeID string) string {
+func getYoutubeUrlFromAmazon(trackASIN string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=amazonMusic&type=song&id=" + trackASIN + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["youtubeMusic"]
+	if !ok {
+		fmt.Println("youtubeMusic URL not found")
+		return "error getting youtubeMusic URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
+func getSpotifyUrlFromYoutube(youtubeID string) string {
 	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=youtubeMusic&type=song&id=" + youtubeID + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["spotify"]
+	if !ok {
+		fmt.Println("spotify URL not found")
+		return "error getting spotify URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
+func getSpotifyUrlFromAmazon(trackASIN string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=amazonMusic&type=song&id=" + trackASIN + "&userCountry=JP&songIfSingle=true")
 	if err != nil {
 		fmt.Println("error getting response,", err)
 		return ""
@@ -301,37 +361,45 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	var spotifyURL string
 	var spotifyTrackID string
 	var youtubeID string
+	var trackASIN string
 	var post []string
-	var toamazon bool
 	var fromspotify bool
 	var fromyoutube bool
+	var fromamazon bool
 
 	for _, str := range msg {
-		if strings.Contains(str, "toamazon") {
-			toamazon = true
-		} else if strings.Contains(str, "https://spotify.link") {
+		if strings.Contains(str, "https://spotify.link") {
 			fromspotify = true
 			spotifyURL = convertSpotifyLink2OpenSpotifyCom(str)
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
-			post = append(post, getYoutubeUrl(spotifyTrackID))
 		} else if strings.Contains(str, "https://open.spotify.com") {
 			fromspotify = true
 			spotifyURL = str
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
-			post = append(post, getYoutubeUrl(spotifyTrackID))
 		} else if strings.Contains(str, "https://music.youtube.com/watch") {
 			fromyoutube = true
 			youtubeID = getYoutubeID(str)
-			post = append(post, getSpotifyUrl(youtubeID))
+		} else if strings.Contains(str, "https://music.amazon.com") {
+			fromamazon = true
+			trackASIN = getTrackASIN(str)
 		}
 	}
 
-	if toamazon {
-		if fromspotify {
-			post = append(post, getAmazonUrlFromSpotify(spotifyTrackID))
-		} else if fromyoutube {
-			post = append(post, getAmazonUrlFromYoutube(youtubeID))
-		}
+	if fromspotify {
+		youtubeUrl := getYoutubeUrlFromSpotify(spotifyTrackID)
+		amazonUrl := getAmazonUrlFromSpotify(spotifyTrackID)
+		post = append(post, youtubeUrl)
+		post = append(post, amazonUrl)
+	} else if fromyoutube {
+		spotifyUrl := getSpotifyUrlFromYoutube(youtubeID)
+		amazonUrl := getAmazonUrlFromYoutube(youtubeID)
+		post = append(post, spotifyUrl)
+		post = append(post, amazonUrl)
+	} else if fromamazon {
+		spotifyUrl := getSpotifyUrlFromAmazon(trackASIN)
+		youtubeUrl := getYoutubeUrlFromAmazon(trackASIN)
+		post = append(post, spotifyUrl)
+		post = append(post, youtubeUrl)
 	}
 
 	postmsg := strings.Join(post, "\n")
