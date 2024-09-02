@@ -97,7 +97,6 @@ const (
 )
 
 func init() {
-
 	flag.StringVar(&Token, "t", "", "Bot Token")
 	flag.Parse()
 }
@@ -198,7 +197,21 @@ func getYoutubeID(m string) string {
 	return matches[1]
 }
 
-func getYoutubeUrl(spotifyTrackID string) string {
+func getTrackASIN(m string) string {
+	re, err := regexp.Compile(`trackASIN=(.*){10}`)
+	if err != nil {
+		fmt.Println("error compiling regex,", err)
+		return ""
+	}
+	matches := re.FindStringSubmatch(m)
+	if len(matches) < 2 {
+		fmt.Println("No match found")
+		return ""
+	}
+	return matches[1]
+}
+
+func getYoutubeUrlFromSpotify(spotifyTrackID string) string {
 	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=spotify&type=song&id=" + spotifyTrackID + "&userCountry=JP&songIfSingle=true")
 	if err != nil {
 		fmt.Println("error getting response,", err)
@@ -221,7 +234,30 @@ func getYoutubeUrl(spotifyTrackID string) string {
 	return postURL
 }
 
-func getSpotifyUrl(youtubeID string) string {
+func getYoutubeUrlFromAmazon(trackASIN string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=amazonMusic&type=song&id=" + trackASIN + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["youtubeMusic"]
+	if !ok {
+		fmt.Println("youtubeMusic URL not found")
+		return "error getting youtubeMusic URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
+func getSpotifyUrlFromYoutube(youtubeID string) string {
 	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=youtubeMusic&type=song&id=" + youtubeID + "&userCountry=JP&songIfSingle=true")
 	if err != nil {
 		fmt.Println("error getting response,", err)
@@ -244,6 +280,75 @@ func getSpotifyUrl(youtubeID string) string {
 	return postURL
 }
 
+func getSpotifyUrlFromAmazon(trackASIN string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=amazonMusic&type=song&id=" + trackASIN + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["spotify"]
+	if !ok {
+		fmt.Println("spotify URL not found")
+		return "error getting spotify URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
+func getAmazonUrlFromSpotify(spotifyTrackID string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=spotify&type=song&id=" + spotifyTrackID + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["amazonMusic"]
+	if !ok {
+		fmt.Println("amazonMusic URL not found")
+		return "error getting amazonMusic URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
+func getAmazonUrlFromYoutube(youtubeID string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=youtubeMusic&type=song&id=" + youtubeID + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["amazonMusic"]
+	if !ok {
+		fmt.Println("amazonMusic URL not found")
+		return "error getting amazonMusic URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the authenticated bot has access to.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -255,21 +360,46 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	msg := multipleUrl2SingleUrl(m.Content)
 	var spotifyURL string
 	var spotifyTrackID string
+	var youtubeID string
+	var trackASIN string
 	var post []string
+	var fromspotify bool
+	var fromyoutube bool
+	var fromamazon bool
 
 	for _, str := range msg {
 		if strings.Contains(str, "https://spotify.link") {
+			fromspotify = true
 			spotifyURL = convertSpotifyLink2OpenSpotifyCom(str)
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
-			post = append(post, getYoutubeUrl(spotifyTrackID))
 		} else if strings.Contains(str, "https://open.spotify.com") {
+			fromspotify = true
 			spotifyURL = str
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
-			post = append(post, getYoutubeUrl(spotifyTrackID))
 		} else if strings.Contains(str, "https://music.youtube.com/watch") {
-			youtubeID := getYoutubeID(str)
-			post = append(post, getSpotifyUrl(youtubeID))
+			fromyoutube = true
+			youtubeID = getYoutubeID(str)
+		} else if strings.Contains(str, "https://music.amazon.com") {
+			fromamazon = true
+			trackASIN = getTrackASIN(str)
 		}
+	}
+
+	if fromspotify {
+		youtubeUrl := getYoutubeUrlFromSpotify(spotifyTrackID)
+		amazonUrl := getAmazonUrlFromSpotify(spotifyTrackID)
+		post = append(post, youtubeUrl)
+		post = append(post, amazonUrl)
+	} else if fromyoutube {
+		spotifyUrl := getSpotifyUrlFromYoutube(youtubeID)
+		amazonUrl := getAmazonUrlFromYoutube(youtubeID)
+		post = append(post, spotifyUrl)
+		post = append(post, amazonUrl)
+	} else if fromamazon {
+		spotifyUrl := getSpotifyUrlFromAmazon(trackASIN)
+		youtubeUrl := getYoutubeUrlFromAmazon(trackASIN)
+		post = append(post, spotifyUrl)
+		post = append(post, youtubeUrl)
 	}
 
 	postmsg := strings.Join(post, "\n")
