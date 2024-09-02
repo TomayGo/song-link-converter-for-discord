@@ -368,38 +368,36 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	var fromamazon bool
 
 	for _, str := range msg {
-		if strings.Contains(str, "https://spotify.link") {
+		switch {
+		case strings.Contains(str, "https://spotify.link"):
 			fromspotify = true
 			spotifyURL = convertSpotifyLink2OpenSpotifyCom(str)
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
-		} else if strings.Contains(str, "https://open.spotify.com") {
+		case strings.Contains(str, "https://open.spotify.com"):
 			fromspotify = true
 			spotifyURL = str
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
-		} else if strings.Contains(str, "https://music.youtube.com/watch") {
+		case strings.Contains(str, "https://music.youtube.com/watch"):
 			fromyoutube = true
 			youtubeID = getYoutubeID(str)
-		} else if strings.Contains(str, "https://music.amazon") {
+		case strings.Contains(str, "https://music.amazon"):
 			fromamazon = true
 			trackASIN = getTrackASIN(str)
 		}
-	}
 
-	if fromspotify {
-		youtubeUrl := getYoutubeUrlFromSpotify(spotifyTrackID)
-		amazonUrl := getAmazonUrlFromSpotify(spotifyTrackID)
-		post = append(post, youtubeUrl)
-		post = append(post, amazonUrl)
-	} else if fromyoutube {
-		spotifyUrl := getSpotifyUrlFromYoutube(youtubeID)
-		amazonUrl := getAmazonUrlFromYoutube(youtubeID)
-		post = append(post, spotifyUrl)
-		post = append(post, amazonUrl)
-	} else if fromamazon {
-		spotifyUrl := getSpotifyUrlFromAmazon(trackASIN)
-		youtubeUrl := getYoutubeUrlFromAmazon(trackASIN)
-		post = append(post, spotifyUrl)
-		post = append(post, youtubeUrl)
+		if fromspotify {
+			youtubeURL := getYoutubeUrlFromSpotify(spotifyTrackID)
+			amazonURL := getAmazonUrlFromSpotify(spotifyTrackID)
+			post = append(post, youtubeURL, amazonURL)
+		} else if fromyoutube {
+			spotifyURL := getSpotifyUrlFromYoutube(youtubeID)
+			amazonURL := getAmazonUrlFromYoutube(youtubeID)
+			post = append(post, spotifyURL, amazonURL)
+		} else if fromamazon {
+			spotifyURL := getSpotifyUrlFromAmazon(trackASIN)
+			youtubeURL := getYoutubeUrlFromAmazon(trackASIN)
+			post = append(post, spotifyURL, youtubeURL)
+		}
 	}
 
 	postmsg := strings.Join(post, "\n")
