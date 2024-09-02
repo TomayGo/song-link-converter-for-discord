@@ -97,7 +97,6 @@ const (
 )
 
 func init() {
-
 	flag.StringVar(&Token, "t", "", "Bot Token")
 	flag.Parse()
 }
@@ -244,6 +243,52 @@ func getSpotifyUrl(youtubeID string) string {
 	return postURL
 }
 
+func getAmazonUrlFromSpotify(spotifyTrackID string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=spotify&type=song&id=" + spotifyTrackID + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["amazonMusic"]
+	if !ok {
+		fmt.Println("amazonMusic URL not found")
+		return "error getting amazonMusic URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
+func getAmazonUrlFromYoutube(youtubeID string) string {
+	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=youtubeMusic&type=song&id=" + youtubeID + "&userCountry=JP&songIfSingle=true")
+	if err != nil {
+		fmt.Println("error getting response,", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("error reading response,", err)
+		return ""
+	}
+	var response Response
+	json.Unmarshal(body, &response)
+	youtubeUrl, ok := response.LinksByPlatform["amazonMusic"]
+	if !ok {
+		fmt.Println("amazonMusic URL not found")
+		return "error getting amazonMusic URL"
+	}
+	postURL := youtubeUrl.Url
+	return postURL
+}
+
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the authenticated bot has access to.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -255,20 +300,37 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	msg := multipleUrl2SingleUrl(m.Content)
 	var spotifyURL string
 	var spotifyTrackID string
+	var youtubeID string
 	var post []string
+	var toamazon bool
+	var fromspotify bool
+	var fromyoutube bool
 
 	for _, str := range msg {
-		if strings.Contains(str, "https://spotify.link") {
+		if strings.Contains(str, "toamazon") {
+			toamazon = true
+		} else if strings.Contains(str, "https://spotify.link") {
+			fromspotify = true
 			spotifyURL = convertSpotifyLink2OpenSpotifyCom(str)
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
 			post = append(post, getYoutubeUrl(spotifyTrackID))
 		} else if strings.Contains(str, "https://open.spotify.com") {
+			fromspotify = true
 			spotifyURL = str
 			spotifyTrackID = getSpotifyTrackID(spotifyURL)
 			post = append(post, getYoutubeUrl(spotifyTrackID))
 		} else if strings.Contains(str, "https://music.youtube.com/watch") {
-			youtubeID := getYoutubeID(str)
+			fromyoutube = true
+			youtubeID = getYoutubeID(str)
 			post = append(post, getSpotifyUrl(youtubeID))
+		}
+	}
+
+	if toamazon {
+		if fromspotify {
+			post = append(post, getAmazonUrlFromSpotify(spotifyTrackID))
+		} else if fromyoutube {
+			post = append(post, getAmazonUrlFromYoutube(youtubeID))
 		}
 	}
 
