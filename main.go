@@ -322,7 +322,7 @@ func getAmazonUrlFromSpotify(spotifyTrackID string) string {
 		fmt.Println("amazonMusic URL not found")
 		return "error getting amazonMusic URL"
 	}
-	postURL := songUrl.Url
+	postURL := strings.Replace(songUrl.Url, ".com", ".co.jp", 1)
 	return postURL
 }
 
@@ -345,7 +345,7 @@ func getAmazonUrlFromYoutube(youtubeID string) string {
 		fmt.Println("amazonMusic URL not found")
 		return "error getting amazonMusic URL"
 	}
-	postURL := songUrl.Url
+	postURL := strings.Replace(songUrl.Url, ".com", ".co.jp", 1)
 	return postURL
 }
 
