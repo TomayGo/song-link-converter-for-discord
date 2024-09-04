@@ -388,14 +388,32 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if fromspotify {
 			youtubeURL := getYoutubeUrlFromSpotify(spotifyTrackID)
 			amazonURL := getAmazonUrlFromSpotify(spotifyTrackID)
+			if youtubeURL == "error getting youtubeMusic URL" && amazonURL != "error getting amazonMusic URL" {
+				youtubeURL = getYoutubeUrlFromAmazon(getTrackASIN(amazonURL))
+			}
+			if amazonURL == "error getting amazonMusic URL" && youtubeURL != "error getting youtubeMusic URL" {
+				amazonURL = getAmazonUrlFromYoutube(getYoutubeID(youtubeURL))
+			}
 			post = append(post, youtubeURL, amazonURL)
 		} else if fromyoutube {
 			spotifyURL := getSpotifyUrlFromYoutube(youtubeID)
 			amazonURL := getAmazonUrlFromYoutube(youtubeID)
+			if spotifyURL == "error getting spotify URL" && amazonURL != "error getting amazonMusic URL" {
+				spotifyURL = getSpotifyUrlFromAmazon(getTrackASIN(amazonURL))
+			}
+			if amazonURL == "error getting amazonMusic URL" && spotifyURL != "error getting spotify URL" {
+				amazonURL = getAmazonUrlFromSpotify(getSpotifyTrackID(spotifyURL))
+			}
 			post = append(post, spotifyURL, amazonURL)
 		} else if fromamazon {
 			spotifyURL := getSpotifyUrlFromAmazon(trackASIN)
 			youtubeURL := getYoutubeUrlFromAmazon(trackASIN)
+			if spotifyURL == "error getting spotify URL" && youtubeURL != "error getting youtubeMusic URL" {
+				spotifyURL = getSpotifyUrlFromYoutube(getYoutubeID(youtubeURL))
+			}
+			if youtubeURL == "error getting youtubeMusic URL" && spotifyURL != "error getting spotify URL" {
+				youtubeURL = getYoutubeUrlFromSpotify(getSpotifyTrackID(spotifyURL))
+			}
 			post = append(post, spotifyURL, youtubeURL)
 		}
 	}
