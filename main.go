@@ -225,12 +225,12 @@ func getYoutubeUrlFromSpotify(spotifyTrackID string) string {
 	}
 	var response Response
 	json.Unmarshal(body, &response)
-	youtubeUrl, ok := response.LinksByPlatform["youtubeMusic"]
+	songUrl, ok := response.LinksByPlatform["youtubeMusic"]
 	if !ok {
 		fmt.Println("youtubeMusic URL not found")
 		return "error getting youtubeMusic URL"
 	}
-	postURL := youtubeUrl.Url
+	postURL := songUrl.Url
 	return postURL
 }
 
@@ -248,12 +248,12 @@ func getYoutubeUrlFromAmazon(trackASIN string) string {
 	}
 	var response Response
 	json.Unmarshal(body, &response)
-	youtubeUrl, ok := response.LinksByPlatform["youtubeMusic"]
+	songUrl, ok := response.LinksByPlatform["youtubeMusic"]
 	if !ok {
 		fmt.Println("youtubeMusic URL not found")
 		return "error getting youtubeMusic URL"
 	}
-	postURL := youtubeUrl.Url
+	postURL := songUrl.Url
 	return postURL
 }
 
@@ -271,12 +271,12 @@ func getSpotifyUrlFromYoutube(youtubeID string) string {
 	}
 	var response Response
 	json.Unmarshal(body, &response)
-	youtubeUrl, ok := response.LinksByPlatform["spotify"]
+	songUrl, ok := response.LinksByPlatform["spotify"]
 	if !ok {
 		fmt.Println("spotify URL not found")
 		return "error getting spotify URL"
 	}
-	postURL := youtubeUrl.Url
+	postURL := songUrl.Url
 	return postURL
 }
 
@@ -294,12 +294,12 @@ func getSpotifyUrlFromAmazon(trackASIN string) string {
 	}
 	var response Response
 	json.Unmarshal(body, &response)
-	youtubeUrl, ok := response.LinksByPlatform["spotify"]
+	songUrl, ok := response.LinksByPlatform["spotify"]
 	if !ok {
 		fmt.Println("spotify URL not found")
 		return "error getting spotify URL"
 	}
-	postURL := youtubeUrl.Url
+	postURL := songUrl.Url
 	return postURL
 }
 
@@ -317,12 +317,12 @@ func getAmazonUrlFromSpotify(spotifyTrackID string) string {
 	}
 	var response Response
 	json.Unmarshal(body, &response)
-	youtubeUrl, ok := response.LinksByPlatform["amazonMusic"]
+	songUrl, ok := response.LinksByPlatform["amazonMusic"]
 	if !ok {
 		fmt.Println("amazonMusic URL not found")
 		return "error getting amazonMusic URL"
 	}
-	postURL := youtubeUrl.Url
+	postURL := songUrl.Url
 	return postURL
 }
 
@@ -340,12 +340,12 @@ func getAmazonUrlFromYoutube(youtubeID string) string {
 	}
 	var response Response
 	json.Unmarshal(body, &response)
-	youtubeUrl, ok := response.LinksByPlatform["amazonMusic"]
+	songUrl, ok := response.LinksByPlatform["amazonMusic"]
 	if !ok {
 		fmt.Println("amazonMusic URL not found")
 		return "error getting amazonMusic URL"
 	}
-	postURL := youtubeUrl.Url
+	postURL := songUrl.Url
 	return postURL
 }
 
