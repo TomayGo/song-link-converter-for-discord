@@ -358,16 +358,17 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	msg := multipleUrl2SingleUrl(m.Content)
-	var spotifyURL string
-	var spotifyTrackID string
-	var youtubeID string
-	var trackASIN string
 	var post []string
-	var fromspotify bool
-	var fromyoutube bool
-	var fromamazon bool
 
 	for _, str := range msg {
+		fmt.Println()
+		var spotifyURL string
+		var spotifyTrackID string
+		var youtubeID string
+		var trackASIN string
+		var fromspotify bool
+		var fromyoutube bool
+		var fromamazon bool
 		switch {
 		case strings.Contains(str, "https://spotify.link"):
 			fromspotify = true
