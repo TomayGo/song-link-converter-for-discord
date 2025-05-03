@@ -637,12 +637,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			urlsToPost = []string{urls["spotify"], urls["youtube"], urls["amazon"]}
 		}
 
-		// Add only non-error URLs
-		for _, url := range urlsToPost {
-			if !strings.Contains(url, "error getting") && url != "" {
-				post = append(post, url)
-			}
-		}
+		post = append(post, urlsToPost...)
 	}
 
 	if len(post) > 0 {
