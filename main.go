@@ -538,7 +538,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		case strings.Contains(str, "https://music.amazon"):
 			fromamazon = true
 			trackASIN = getTrackASIN(str)
-		case strings.Contains(str, "https://music.apple.com"):
+		case strings.Contains(str, "music.apple.com"):
 			fromapplemusic = true
 			appleMusicID = getAppleMusicID(str)
 		}
