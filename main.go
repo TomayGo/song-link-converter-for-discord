@@ -557,7 +557,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			} else if amazonURL == "error getting amazonMusic URL" && appleURL != "error getting appleMusic URL" {
 				amazonURL = getAmazonUrlFromAppleMusic(getAppleMusicID(appleURL))
 			}
-			post = append(post, youtubeURL, amazonURL)
+			post = append(post, youtubeURL, amazonURL, appleURL)
 		} else if fromyoutube {
 			spotifyURL := getSpotifyUrlFromYoutube(youtubeID)
 			amazonURL := getAmazonUrlFromYoutube(youtubeID)
@@ -572,7 +572,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			} else if amazonURL == "error getting amazonMusic URL" && appleURL != "error getting appleMusic URL" {
 				amazonURL = getAmazonUrlFromAppleMusic(getAppleMusicID(appleURL))
 			}
-			post = append(post, spotifyURL, amazonURL)
+			post = append(post, spotifyURL, amazonURL, appleURL)
 		} else if fromamazon {
 			spotifyURL := getSpotifyUrlFromAmazon(trackASIN)
 			youtubeURL := getYoutubeUrlFromAmazon(trackASIN)
@@ -587,7 +587,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			} else if youtubeURL == "error getting youtubeMusic URL" && appleURL != "error getting appleMusic URL" {
 				youtubeURL = getYoutubeUrlFromAppleMusic(getAppleMusicID(appleURL))
 			}
-			post = append(post, spotifyURL, youtubeURL)
+			post = append(post, spotifyURL, youtubeURL, appleURL)
 		} else if fromapplemusic {
 			spotifyURL := getSpotifyUrlFromAppleMusic(appleMusicID)
 			youtubeURL := getYoutubeUrlFromAppleMusic(appleMusicID)
@@ -602,7 +602,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			} else if youtubeURL == "error getting youtubeMusic URL" && amazonURL != "error getting amazonMusic URL" {
 				youtubeURL = getYoutubeUrlFromAmazon(getTrackASIN(amazonURL))
 			}
-			post = append(post, spotifyURL, youtubeURL)
+			post = append(post, spotifyURL, youtubeURL, amazonURL)
 		}
 	}
 
