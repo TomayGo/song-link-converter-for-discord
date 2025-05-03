@@ -144,6 +144,29 @@ func multipleUrl2SingleUrl(m string) []string {
 	return arr1
 }
 
+// Utility function to fetch and unmarshal song link response
+func fetchSongLinkResponse(platform string, id string, country string) (*Response, error) {
+	url := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?platform=%s&type=song&id=%s&userCountry=%s&songIfSingle=true", platform, id, country)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var response Response
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response, nil
+}
+
 func convertSpotifyLink2OpenSpotifyCom(m string) string {
 	re, err := regexp.Compile(`http(.*)://(.*)`)
 	if err != nil {
@@ -226,19 +249,11 @@ func getAppleMusicID(m string) string {
 }
 
 func getYoutubeUrlFromSpotify(spotifyTrackID string) string {
-	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=spotify&type=song&id=" + spotifyTrackID + "&userCountry=JP&songIfSingle=true")
+	response, err := fetchSongLinkResponse("spotify", spotifyTrackID, "JP")
 	if err != nil {
-		fmt.Println("error getting response,", err)
+		fmt.Println("error fetching response,", err)
 		return ""
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("error reading response,", err)
-		return ""
-	}
-	var response Response
-	json.Unmarshal(body, &response)
 	songUrl, ok := response.LinksByPlatform["youtubeMusic"]
 	if !ok {
 		fmt.Println("youtubeMusic URL not found")
@@ -249,19 +264,11 @@ func getYoutubeUrlFromSpotify(spotifyTrackID string) string {
 }
 
 func getYoutubeUrlFromAmazon(trackASIN string) string {
-	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=amazonMusic&type=song&id=" + trackASIN + "&userCountry=JP&songIfSingle=true")
+	response, err := fetchSongLinkResponse("amazonMusic", trackASIN, "JP")
 	if err != nil {
-		fmt.Println("error getting response,", err)
+		fmt.Println("error fetching response,", err)
 		return ""
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("error reading response,", err)
-		return ""
-	}
-	var response Response
-	json.Unmarshal(body, &response)
 	songUrl, ok := response.LinksByPlatform["youtubeMusic"]
 	if !ok {
 		fmt.Println("youtubeMusic URL not found")
@@ -272,19 +279,11 @@ func getYoutubeUrlFromAmazon(trackASIN string) string {
 }
 
 func getYoutubeUrlFromAppleMusic(appleMusicID string) string {
-	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=appleMusic&type=song&id=" + appleMusicID + "&userCountry=JP&songIfSingle=true")
+	response, err := fetchSongLinkResponse("appleMusic", appleMusicID, "JP")
 	if err != nil {
-		fmt.Println("error getting response,", err)
+		fmt.Println("error fetching response,", err)
 		return ""
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("error reading response,", err)
-		return ""
-	}
-	var response Response
-	json.Unmarshal(body, &response)
 	songUrl, ok := response.LinksByPlatform["youtubeMusic"]
 	if !ok {
 		fmt.Println("youtubeMusic URL not found")
@@ -295,19 +294,11 @@ func getYoutubeUrlFromAppleMusic(appleMusicID string) string {
 }
 
 func getSpotifyUrlFromYoutube(youtubeID string) string {
-	resp, err := http.Get("https://api.song.link/v1-alpha.1/links?platform=youtubeMusic&type=song&id=" + youtubeID + "&userCountry=JP&songIfSingle=true")
+	response, err := fetchSongLinkResponse("youtubeMusic", youtubeID, "JP")
 	if err != nil {
-		fmt.Println("error getting response,", err)
+		fmt.Println("error fetching response,", err)
 		return ""
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("error reading response,", err)
-		return ""
-	}
-	var response Response
-	json.Unmarshal(body, &response)
 	songUrl, ok := response.LinksByPlatform["spotify"]
 	if !ok {
 		fmt.Println("spotify URL not found")
