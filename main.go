@@ -212,7 +212,7 @@ func getTrackASIN(m string) string {
 }
 
 func getAppleMusicID(m string) string {
-	re, err := regexp.Compile(`?i=([A-Z0-9]{10})`)
+	re, err := regexp.Compile(`\?i=([0-9]{10})`)
 	if err != nil {
 		fmt.Println("error compiling regex,", err)
 		return ""
