@@ -501,6 +501,85 @@ func getAppleMusicUrlFromAmazon(trackASIN string) string {
 	return postURL
 }
 
+// Function to retrieve URLs from various music services based on source type and ID
+func getURLsFromService(sourceType string, sourceID string) map[string]string {
+	urls := make(map[string]string)
+	switch sourceType {
+	case "spotify":
+		urls["youtube"] = getYoutubeUrlFromSpotify(sourceID)
+		urls["amazon"] = getAmazonUrlFromSpotify(sourceID)
+		urls["apple"] = getAppleMusicUrlFromSpotify(sourceID)
+	case "youtube":
+		urls["spotify"] = getSpotifyUrlFromYoutube(sourceID)
+		urls["amazon"] = getAmazonUrlFromYoutube(sourceID)
+		urls["apple"] = getAppleMusicUrlFromYoutube(sourceID)
+	case "amazon":
+		urls["spotify"] = getSpotifyUrlFromAmazon(sourceID)
+		urls["youtube"] = getYoutubeUrlFromAmazon(sourceID)
+		urls["apple"] = getAppleMusicUrlFromAmazon(sourceID)
+	case "apple":
+		urls["spotify"] = getSpotifyUrlFromAppleMusic(sourceID)
+		urls["youtube"] = getYoutubeUrlFromAppleMusic(sourceID)
+		urls["amazon"] = getAmazonUrlFromAppleMusic(sourceID)
+	}
+
+	// Retry fetching URLs from alternative services when primary fetch fails
+	retryFromOtherService(urls)
+
+	return urls
+}
+
+// Function to retry URL retrieval through alternative services when the primary fetch fails
+func retryFromOtherService(urls map[string]string) {
+	// Retry YouTube URL
+	if urls["youtube"] == "error getting youtubeMusic URL" {
+		switch {
+		case urls["amazon"] != "error getting amazonMusic URL":
+			urls["youtube"] = getYoutubeUrlFromAmazon(getTrackASIN(urls["amazon"]))
+		case urls["apple"] != "error getting appleMusic URL":
+			urls["youtube"] = getYoutubeUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
+		case urls["spotify"] != "error getting spotify URL":
+			urls["youtube"] = getYoutubeUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
+		}
+	}
+
+	// Retry Amazon URL
+	if urls["amazon"] == "error getting amazonMusic URL" {
+		switch {
+		case urls["youtube"] != "error getting youtubeMusic URL":
+			urls["amazon"] = getAmazonUrlFromYoutube(getYoutubeID(urls["youtube"]))
+		case urls["apple"] != "error getting appleMusic URL":
+			urls["amazon"] = getAmazonUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
+		case urls["spotify"] != "error getting spotify URL":
+			urls["amazon"] = getAmazonUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
+		}
+	}
+
+	// Retry Spotify URL
+	if urls["spotify"] == "error getting spotify URL" {
+		switch {
+		case urls["youtube"] != "error getting youtubeMusic URL":
+			urls["spotify"] = getSpotifyUrlFromYoutube(getYoutubeID(urls["youtube"]))
+		case urls["amazon"] != "error getting amazonMusic URL":
+			urls["spotify"] = getSpotifyUrlFromAmazon(getTrackASIN(urls["amazon"]))
+		case urls["apple"] != "error getting appleMusic URL":
+			urls["spotify"] = getSpotifyUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
+		}
+	}
+
+	// Retry Apple Music URL
+	if urls["apple"] == "error getting appleMusic URL" {
+		switch {
+		case urls["youtube"] != "error getting youtubeMusic URL":
+			urls["apple"] = getAppleMusicUrlFromYoutube(getYoutubeID(urls["youtube"]))
+		case urls["amazon"] != "error getting amazonMusic URL":
+			urls["apple"] = getAppleMusicUrlFromAmazon(getTrackASIN(urls["amazon"]))
+		case urls["spotify"] != "error getting spotify URL":
+			urls["apple"] = getAppleMusicUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
+		}
+	}
+}
+
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the authenticated bot has access to.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -514,99 +593,60 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	for _, str := range msg {
 		fmt.Println()
-		var spotifyURL string
-		var spotifyTrackID string
-		var youtubeID string
-		var trackASIN string
-		var appleMusicID string
-		var fromspotify bool
-		var fromyoutube bool
-		var fromamazon bool
-		var fromapplemusic bool
+		var sourceType string
+		var sourceID string
+
 		switch {
 		case strings.Contains(str, "https://spotify.link"):
-			fromspotify = true
-			spotifyURL = convertSpotifyLink2OpenSpotifyCom(str)
-			spotifyTrackID = getSpotifyTrackID(spotifyURL)
+			spotifyURL := convertSpotifyLink2OpenSpotifyCom(str)
+			sourceType = "spotify"
+			sourceID = getSpotifyTrackID(spotifyURL)
 		case strings.Contains(str, "https://open.spotify.com"):
-			fromspotify = true
-			spotifyURL = str
-			spotifyTrackID = getSpotifyTrackID(spotifyURL)
+			sourceType = "spotify"
+			sourceID = getSpotifyTrackID(str)
 		case strings.Contains(str, "https://music.youtube.com/watch"):
-			fromyoutube = true
-			youtubeID = getYoutubeID(str)
+			sourceType = "youtube"
+			sourceID = getYoutubeID(str)
 		case strings.Contains(str, "https://music.amazon"):
-			fromamazon = true
-			trackASIN = getTrackASIN(str)
+			sourceType = "amazon"
+			sourceID = getTrackASIN(str)
 		case strings.Contains(str, "music.apple.com"):
-			fromapplemusic = true
-			appleMusicID = getAppleMusicID(str)
+			sourceType = "apple"
+			sourceID = getAppleMusicID(str)
+		default:
+			continue
 		}
 
-		if fromspotify {
-			youtubeURL := getYoutubeUrlFromSpotify(spotifyTrackID)
-			amazonURL := getAmazonUrlFromSpotify(spotifyTrackID)
-			appleURL := getAppleMusicUrlFromSpotify(spotifyTrackID)
-			if youtubeURL == "error getting youtubeMusic URL" && amazonURL != "error getting amazonMusic URL" {
-				youtubeURL = getYoutubeUrlFromAmazon(getTrackASIN(amazonURL))
-			} else if youtubeURL == "error getting youtubeMusic URL" && appleURL != "error getting appleMusic URL" {
-				youtubeURL = getYoutubeUrlFromAppleMusic(getAppleMusicID(appleURL))
+		if sourceID == "" {
+			continue
+		}
+
+		// Retrieve URLs from each service
+		urls := getURLsFromService(sourceType, sourceID)
+
+		// Process to maintain the order of original URLs
+		var urlsToPost []string
+		switch sourceType {
+		case "spotify":
+			urlsToPost = []string{urls["youtube"], urls["amazon"], urls["apple"]}
+		case "youtube":
+			urlsToPost = []string{urls["spotify"], urls["amazon"], urls["apple"]}
+		case "amazon":
+			urlsToPost = []string{urls["spotify"], urls["youtube"], urls["apple"]}
+		case "apple":
+			urlsToPost = []string{urls["spotify"], urls["youtube"], urls["amazon"]}
+		}
+
+		// Add only non-error URLs
+		for _, url := range urlsToPost {
+			if !strings.Contains(url, "error getting") && url != "" {
+				post = append(post, url)
 			}
-			if amazonURL == "error getting amazonMusic URL" && youtubeURL != "error getting youtubeMusic URL" {
-				amazonURL = getAmazonUrlFromYoutube(getYoutubeID(youtubeURL))
-			} else if amazonURL == "error getting amazonMusic URL" && appleURL != "error getting appleMusic URL" {
-				amazonURL = getAmazonUrlFromAppleMusic(getAppleMusicID(appleURL))
-			}
-			post = append(post, youtubeURL, amazonURL, appleURL)
-		} else if fromyoutube {
-			spotifyURL := getSpotifyUrlFromYoutube(youtubeID)
-			amazonURL := getAmazonUrlFromYoutube(youtubeID)
-			appleURL := getAppleMusicUrlFromYoutube(youtubeID)
-			if spotifyURL == "error getting spotify URL" && amazonURL != "error getting amazonMusic URL" {
-				spotifyURL = getSpotifyUrlFromAmazon(getTrackASIN(amazonURL))
-			} else if spotifyURL == "error getting spotify URL" && appleURL != "error getting appleMusic URL" {
-				spotifyURL = getSpotifyUrlFromAppleMusic(getAppleMusicID(appleURL))
-			}
-			if amazonURL == "error getting amazonMusic URL" && spotifyURL != "error getting spotify URL" {
-				amazonURL = getAmazonUrlFromSpotify(getSpotifyTrackID(spotifyURL))
-			} else if amazonURL == "error getting amazonMusic URL" && appleURL != "error getting appleMusic URL" {
-				amazonURL = getAmazonUrlFromAppleMusic(getAppleMusicID(appleURL))
-			}
-			post = append(post, spotifyURL, amazonURL, appleURL)
-		} else if fromamazon {
-			spotifyURL := getSpotifyUrlFromAmazon(trackASIN)
-			youtubeURL := getYoutubeUrlFromAmazon(trackASIN)
-			appleURL := getAppleMusicUrlFromAmazon(trackASIN)
-			if spotifyURL == "error getting spotify URL" && youtubeURL != "error getting youtubeMusic URL" {
-				spotifyURL = getSpotifyUrlFromYoutube(getYoutubeID(youtubeURL))
-			} else if spotifyURL == "error getting spotify URL" && appleURL != "error getting appleMusic URL" {
-				spotifyURL = getSpotifyUrlFromAppleMusic(getAppleMusicID(appleURL))
-			}
-			if youtubeURL == "error getting youtubeMusic URL" && spotifyURL != "error getting spotify URL" {
-				youtubeURL = getYoutubeUrlFromSpotify(getSpotifyTrackID(spotifyURL))
-			} else if youtubeURL == "error getting youtubeMusic URL" && appleURL != "error getting appleMusic URL" {
-				youtubeURL = getYoutubeUrlFromAppleMusic(getAppleMusicID(appleURL))
-			}
-			post = append(post, spotifyURL, youtubeURL, appleURL)
-		} else if fromapplemusic {
-			spotifyURL := getSpotifyUrlFromAppleMusic(appleMusicID)
-			youtubeURL := getYoutubeUrlFromAppleMusic(appleMusicID)
-			amazonURL := getAmazonUrlFromAppleMusic(appleMusicID)
-			if spotifyURL == "error getting spotify URL" && youtubeURL != "error getting youtubeMusic URL" {
-				spotifyURL = getSpotifyUrlFromYoutube(getYoutubeID(youtubeURL))
-			} else if spotifyURL == "error getting spotify URL" && amazonURL != "error getting amazonMusic URL" {
-				spotifyURL = getSpotifyUrlFromAmazon(getTrackASIN(amazonURL))
-			}
-			if youtubeURL == "error getting youtubeMusic URL" && spotifyURL != "error getting spotify URL" {
-				youtubeURL = getYoutubeUrlFromSpotify(getSpotifyTrackID(spotifyURL))
-			} else if youtubeURL == "error getting youtubeMusic URL" && amazonURL != "error getting amazonMusic URL" {
-				youtubeURL = getYoutubeUrlFromAmazon(getTrackASIN(amazonURL))
-			}
-			post = append(post, spotifyURL, youtubeURL, amazonURL)
 		}
 	}
 
-	postmsg := strings.Join(post, "\n")
-	s.ChannelMessageSend(m.ChannelID, postmsg)
-
+	if len(post) > 0 {
+		postmsg := strings.Join(post, "\n")
+		s.ChannelMessageSend(m.ChannelID, postmsg)
+	}
 }
