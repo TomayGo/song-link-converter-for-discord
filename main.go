@@ -173,12 +173,16 @@ func multipleUrl2SingleUrl(m string) []string {
 func fetchMusicURL(sourceType string, sourceID string, targetServiceType string) string {
 	sourcePlatform, ok := serviceToPlatform[sourceType]
 	if !ok {
-		return fmt.Sprintf("error: unknown source service type for platform mapping: %s", sourceType)
+		errMsg := fmt.Sprintf("error: unknown source service type for platform mapping: %s", sourceType)
+		fmt.Println(errMsg) // Console output
+		return errMsg
 	}
 
 	targetPlatform, ok := serviceToPlatform[targetServiceType]
 	if !ok {
-		return fmt.Sprintf("error: unknown target service type for platform mapping: %s", targetServiceType)
+		errMsg := fmt.Sprintf("error: unknown target service type for platform mapping: %s", targetServiceType)
+		fmt.Println(errMsg) // Console output
+		return errMsg
 	}
 
 	// Use "JP" as userCountry, can be parameterized if needed.
@@ -186,17 +190,23 @@ func fetchMusicURL(sourceType string, sourceID string, targetServiceType string)
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Sprintf("error getting %s URL (http error): %v", targetServiceType, err)
+		errMsg := fmt.Sprintf("error getting %s URL (http error for source %s, id %s): %v", targetServiceType, sourceType, sourceID, err)
+		fmt.Println(errMsg) // Console output
+		return errMsg
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Sprintf("error getting %s URL (status %d)", targetServiceType, resp.StatusCode)
+		errMsg := fmt.Sprintf("error getting %s URL (status %d for source %s, id %s)", targetServiceType, resp.StatusCode, sourceType, sourceID)
+		fmt.Println(errMsg) // Console output
+		return errMsg
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Sprintf("error getting %s URL (read body error): %v", targetServiceType, err)
+		errMsg := fmt.Sprintf("error getting %s URL (read body error for source %s, id %s): %v", targetServiceType, sourceType, sourceID, err)
+		fmt.Println(errMsg) // Console output
+		return errMsg
 	}
 
 	var response Response
@@ -207,9 +217,13 @@ func fetchMusicURL(sourceType string, sourceID string, targetServiceType string)
 			Code    int    `json:"code"`
 		}
 		if json.Unmarshal(body, &errorResponse) == nil && errorResponse.Message != "" {
-			return fmt.Sprintf("error getting %s URL (api error %d: %s)", targetServiceType, errorResponse.Code, errorResponse.Message)
+			errMsg := fmt.Sprintf("error getting %s URL (api error %d for source %s, id %s: %s)", targetServiceType, errorResponse.Code, sourceType, sourceID, errorResponse.Message)
+			fmt.Println(errMsg) // Console output
+			return errMsg
 		}
-		return fmt.Sprintf("error getting %s URL (unmarshal error): %v. Body: %s", targetServiceType, err, string(body))
+		errMsg := fmt.Sprintf("error getting %s URL (unmarshal error for source %s, id %s): %v. Body: %s", targetServiceType, sourceType, sourceID, err, string(body))
+		fmt.Println(errMsg) // Console output
+		return errMsg
 	}
 
 	linkData, exists := response.LinksByPlatform[targetPlatform]
@@ -218,7 +232,9 @@ func fetchMusicURL(sourceType string, sourceID string, targetServiceType string)
 			linkData, exists = response.LinksByPlatform[Itunes]
 		}
 		if !exists {
-			return fmt.Sprintf("error getting %s URL (%s link not found in API response)", targetServiceType, targetPlatform)
+			errMsg := fmt.Sprintf("error getting %s URL (%s link not found in API response for source %s, id %s)", targetServiceType, targetPlatform, sourceType, sourceID)
+			fmt.Println(errMsg) // Console output
+			return errMsg
 		}
 	}
 
@@ -412,7 +428,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	inputURLs := multipleUrl2SingleUrl(m.Content)
-	var urlsToPost []string
+	var successfulUrlsToPost []string
+	var failedServicesMessages []string
 	processedSourceURLs := make(map[string]bool)
 
 	for _, currentInputURL := range inputURLs {
@@ -431,6 +448,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				sourceType = serviceSpotify
 				sourceID = getSpotifyTrackID(effectiveURL)
 			} else {
+				fmt.Printf("Console: Could not resolve spotify.link: %s\n", currentInputURL)
+				failedServicesMessages = append(failedServicesMessages, fmt.Sprintf("error getting Spotify Link (%s): 短縮URLの解決に失敗しました。", currentInputURL))
 				continue
 			}
 		} else if strings.Contains(currentInputURL, "open.spotify.com") {
@@ -454,6 +473,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		if sourceID == "" {
+			fmt.Printf("Console: Could not extract ID from URL: %s (Service Type: %s)\n", currentInputURL, sourceType)
+			failedServicesMessages = append(failedServicesMessages, fmt.Sprintf("error getting %s ID from URL (%s): ID抽出失敗", strings.Title(sourceType), currentInputURL))
 			continue
 		}
 
@@ -467,37 +488,86 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		targetServiceTypes := serviceRelationship[sourceType]
 		for _, targetType := range targetServiceTypes {
 			url, ok := retrievedServiceURLs[targetType]
-			if ok && !strings.HasPrefix(url, "error getting") && url != "" {
-				isNew := true
-				for _, existing := range urlsToPost {
-					if existing == url {
-						isNew = false
-						break
+			if ok && url != "" {
+				if !strings.HasPrefix(url, "error getting") {
+					isNew := true
+					for _, existing := range successfulUrlsToPost {
+						if existing == url {
+							isNew = false
+							break
+						}
 					}
+					if isNew {
+						successfulUrlsToPost = append(successfulUrlsToPost, url)
+					}
+				} else {
+					rawError := url
+					isNewError := true
+					for _, existingMsg := range failedServicesMessages {
+						if strings.HasPrefix(existingMsg, fmt.Sprintf("error getting %s", strings.Title(targetType))) {
+							isNewError = false
+							break
+						}
+					}
+					if isNewError {
+						failedServicesMessages = append(failedServicesMessages, rawError)
+					}
+					fmt.Printf("Console: Failed to get URL for %s from source %s (ID: %s): %s\n", targetType, sourceType, sourceID, rawError)
 				}
-				if isNew {
-					urlsToPost = append(urlsToPost, url)
-				}
+			} else if !ok {
+				rawError := fmt.Sprintf("error getting %s: 情報を取得できませんでした（内部エラー、ターゲット未検出）。", strings.Title(targetType))
+				failedServicesMessages = append(failedServicesMessages, rawError)
+				fmt.Printf("Console: Target service %s not found in retrieved URLs map for source %s (ID: %s)\n", targetType, sourceType, sourceID)
 			}
 		}
 	}
 
-	if len(urlsToPost) > 0 {
-		finalUniquePosts := []string{}
+	var messageParts []string
+
+	if len(successfulUrlsToPost) > 0 {
+		finalUniqueSuccessfulUrls := []string{}
 		seenFinalUrls := make(map[string]bool)
-		for _, url := range urlsToPost {
+		for _, url := range successfulUrlsToPost {
 			if !seenFinalUrls[url] {
-				finalUniquePosts = append(finalUniquePosts, url)
+				finalUniqueSuccessfulUrls = append(finalUniqueSuccessfulUrls, url)
 				seenFinalUrls[url] = true
 			}
 		}
+		if len(finalUniqueSuccessfulUrls) > 0 {
+			messageParts = append(messageParts, strings.Join(finalUniqueSuccessfulUrls, "\n"))
+		}
+	}
 
-		if len(finalUniquePosts) > 0 {
-			responseMessage := strings.Join(finalUniquePosts, "\n")
+	if len(failedServicesMessages) > 0 {
+		uniqueFailedMessages := []string{}
+		seenFailed := make(map[string]bool)
+		for _, msg := range failedServicesMessages {
+			if !seenFailed[msg] {
+				uniqueFailedMessages = append(uniqueFailedMessages, msg)
+				seenFailed[msg] = true
+			}
+		}
+		if len(uniqueFailedMessages) > 0 {
+			if len(messageParts) > 0 {
+				messageParts = append(messageParts, "\n") // Add a separator if there were successful URLs
+			}
+			messageParts = append(messageParts, "以下のサービスは取得できませんでした：")
+			messageParts = append(messageParts, strings.Join(uniqueFailedMessages, "\n"))
+		}
+	}
+
+	if len(messageParts) > 0 {
+		responseMessage := strings.Join(messageParts, "\n")
+		// Ensure message is not empty or just whitespace before sending
+		if strings.TrimSpace(responseMessage) != "" {
 			_, err := s.ChannelMessageSend(m.ChannelID, responseMessage)
 			if err != nil {
 				fmt.Println("Error sending message:", err)
 			}
+		} else {
+			fmt.Println("Console: No valid information to send to Discord.")
 		}
+	} else {
+		fmt.Println("Console: No URLs or error messages to post.")
 	}
 }
