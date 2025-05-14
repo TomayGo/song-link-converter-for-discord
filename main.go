@@ -530,101 +530,19 @@ func retryFromOtherService(urls map[string]string) {
 		// 変更があったかどうかを追跡
 		changed := false
 
-		// 元の実装のリトライ処理をそのまま実行
-		// Retry YouTube URL
-		if urls["youtube"] == "error getting youtubeMusic URL" {
-			switch {
-			case urls["amazon"] != "error getting amazonMusic URL":
-				newURL := getYoutubeUrlFromAmazon(getTrackASIN(urls["amazon"]))
-				if newURL != "error getting youtubeMusic URL" && newURL != "" {
-					urls["youtube"] = newURL
-					changed = true
-				}
-			case urls["apple"] != "error getting appleMusic URL":
-				newURL := getYoutubeUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
-				if newURL != "error getting youtubeMusic URL" && newURL != "" {
-					urls["youtube"] = newURL
-					changed = true
-				}
-			case urls["spotify"] != "error getting spotify URL":
-				newURL := getYoutubeUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
-				if newURL != "error getting youtubeMusic URL" && newURL != "" {
-					urls["youtube"] = newURL
-					changed = true
-				}
-			}
-		}
+		// 最後のリトライでどのサービスが更新されたかを追跡
+		updatedServices := make(map[string]bool)
 
-		// Retry Amazon URL
-		if urls["amazon"] == "error getting amazonMusic URL" {
-			switch {
-			case urls["youtube"] != "error getting youtubeMusic URL":
-				newURL := getAmazonUrlFromYoutube(getYoutubeID(urls["youtube"]))
-				if newURL != "error getting amazonMusic URL" && newURL != "" {
-					urls["amazon"] = newURL
-					changed = true
-				}
-			case urls["apple"] != "error getting appleMusic URL":
-				newURL := getAmazonUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
-				if newURL != "error getting amazonMusic URL" && newURL != "" {
-					urls["amazon"] = newURL
-					changed = true
-				}
-			case urls["spotify"] != "error getting spotify URL":
-				newURL := getAmazonUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
-				if newURL != "error getting amazonMusic URL" && newURL != "" {
-					urls["amazon"] = newURL
-					changed = true
-				}
-			}
-		}
+		// 各サービスに対してリトライ
+		changed = retryYouTubeURL(urls, updatedServices) || changed
+		changed = retryAmazonURL(urls, updatedServices) || changed
+		changed = retrySpotifyURL(urls, updatedServices) || changed
+		changed = retryAppleMusicURL(urls, updatedServices) || changed
 
-		// Retry Spotify URL
-		if urls["spotify"] == "error getting spotify URL" {
-			switch {
-			case urls["youtube"] != "error getting youtubeMusic URL":
-				newURL := getSpotifyUrlFromYoutube(getYoutubeID(urls["youtube"]))
-				if newURL != "error getting spotify URL" && newURL != "" {
-					urls["spotify"] = newURL
-					changed = true
-				}
-			case urls["amazon"] != "error getting amazonMusic URL":
-				newURL := getSpotifyUrlFromAmazon(getTrackASIN(urls["amazon"]))
-				if newURL != "error getting spotify URL" && newURL != "" {
-					urls["spotify"] = newURL
-					changed = true
-				}
-			case urls["apple"] != "error getting appleMusic URL":
-				newURL := getSpotifyUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
-				if newURL != "error getting spotify URL" && newURL != "" {
-					urls["spotify"] = newURL
-					changed = true
-				}
-			}
-		}
-
-		// Retry Apple Music URL
-		if urls["apple"] == "error getting appleMusic URL" {
-			switch {
-			case urls["youtube"] != "error getting youtubeMusic URL":
-				newURL := getAppleMusicUrlFromYoutube(getYoutubeID(urls["youtube"]))
-				if newURL != "error getting appleMusic URL" && newURL != "" {
-					urls["apple"] = newURL
-					changed = true
-				}
-			case urls["amazon"] != "error getting amazonMusic URL":
-				newURL := getAppleMusicUrlFromAmazon(getTrackASIN(urls["amazon"]))
-				if newURL != "error getting appleMusic URL" && newURL != "" {
-					urls["apple"] = newURL
-					changed = true
-				}
-			case urls["spotify"] != "error getting spotify URL":
-				newURL := getAppleMusicUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
-				if newURL != "error getting appleMusic URL" && newURL != "" {
-					urls["apple"] = newURL
-					changed = true
-				}
-			}
+		// 更新されたサービスだけを使って他のエラーを再取得
+		if len(updatedServices) > 0 && retry < maxRetries-1 {
+			secondaryChanged := retryFromUpdatedServices(urls, updatedServices)
+			changed = changed || secondaryChanged
 		}
 
 		// すべてのURLが取得できたか、変更がなかったらループを終了
@@ -639,6 +557,191 @@ func retryFromOtherService(urls map[string]string) {
 
 		fmt.Printf("リトライ回数: %d\n", retry+1)
 	}
+}
+
+// YouTubeのURLをリトライで取得
+func retryYouTubeURL(urls map[string]string, updatedServices map[string]bool) bool {
+	changed := false
+
+	if urls["youtube"] == "error getting youtubeMusic URL" {
+		// Amazonから取得
+		if urls["amazon"] != "error getting amazonMusic URL" {
+			newURL := getYoutubeUrlFromAmazon(getTrackASIN(urls["amazon"]))
+			if newURL != "error getting youtubeMusic URL" && newURL != "" {
+				urls["youtube"] = newURL
+				changed = true
+				updatedServices["youtube"] = true
+			}
+		}
+		// AppleMusicから取得（まだエラーの場合）
+		if urls["youtube"] == "error getting youtubeMusic URL" && urls["apple"] != "error getting appleMusic URL" {
+			newURL := getYoutubeUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
+			if newURL != "error getting youtubeMusic URL" && newURL != "" {
+				urls["youtube"] = newURL
+				changed = true
+				updatedServices["youtube"] = true
+			}
+		}
+		// Spotifyから取得（まだエラーの場合）
+		if urls["youtube"] == "error getting youtubeMusic URL" && urls["spotify"] != "error getting spotify URL" {
+			newURL := getYoutubeUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
+			if newURL != "error getting youtubeMusic URL" && newURL != "" {
+				urls["youtube"] = newURL
+				changed = true
+				updatedServices["youtube"] = true
+			}
+		}
+	}
+
+	return changed
+}
+
+// AmazonのURLをリトライで取得
+func retryAmazonURL(urls map[string]string, updatedServices map[string]bool) bool {
+	changed := false
+
+	if urls["amazon"] == "error getting amazonMusic URL" {
+		// YouTubeから取得
+		if urls["youtube"] != "error getting youtubeMusic URL" {
+			newURL := getAmazonUrlFromYoutube(getYoutubeID(urls["youtube"]))
+			if newURL != "error getting amazonMusic URL" && newURL != "" {
+				urls["amazon"] = newURL
+				changed = true
+				updatedServices["amazon"] = true
+			}
+		}
+		// AppleMusicから取得（まだエラーの場合）
+		if urls["amazon"] == "error getting amazonMusic URL" && urls["apple"] != "error getting appleMusic URL" {
+			newURL := getAmazonUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
+			if newURL != "error getting amazonMusic URL" && newURL != "" {
+				urls["amazon"] = newURL
+				changed = true
+				updatedServices["amazon"] = true
+			}
+		}
+		// Spotifyから取得（まだエラーの場合）
+		if urls["amazon"] == "error getting amazonMusic URL" && urls["spotify"] != "error getting spotify URL" {
+			newURL := getAmazonUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
+			if newURL != "error getting amazonMusic URL" && newURL != "" {
+				urls["amazon"] = newURL
+				changed = true
+				updatedServices["amazon"] = true
+			}
+		}
+	}
+
+	return changed
+}
+
+// SpotifyのURLをリトライで取得
+func retrySpotifyURL(urls map[string]string, updatedServices map[string]bool) bool {
+	changed := false
+
+	if urls["spotify"] == "error getting spotify URL" {
+		// YouTubeから取得
+		if urls["youtube"] != "error getting youtubeMusic URL" {
+			newURL := getSpotifyUrlFromYoutube(getYoutubeID(urls["youtube"]))
+			if newURL != "error getting spotify URL" && newURL != "" {
+				urls["spotify"] = newURL
+				changed = true
+				updatedServices["spotify"] = true
+			}
+		}
+		// Amazonから取得（まだエラーの場合）
+		if urls["spotify"] == "error getting spotify URL" && urls["amazon"] != "error getting amazonMusic URL" {
+			newURL := getSpotifyUrlFromAmazon(getTrackASIN(urls["amazon"]))
+			if newURL != "error getting spotify URL" && newURL != "" {
+				urls["spotify"] = newURL
+				changed = true
+				updatedServices["spotify"] = true
+			}
+		}
+		// AppleMusicから取得（まだエラーの場合）
+		if urls["spotify"] == "error getting spotify URL" && urls["apple"] != "error getting appleMusic URL" {
+			newURL := getSpotifyUrlFromAppleMusic(getAppleMusicID(urls["apple"]))
+			if newURL != "error getting spotify URL" && newURL != "" {
+				urls["spotify"] = newURL
+				changed = true
+				updatedServices["spotify"] = true
+			}
+		}
+	}
+
+	return changed
+}
+
+// Apple MusicのURLをリトライで取得
+func retryAppleMusicURL(urls map[string]string, updatedServices map[string]bool) bool {
+	changed := false
+
+	if urls["apple"] == "error getting appleMusic URL" {
+		// YouTubeから取得
+		if urls["youtube"] != "error getting youtubeMusic URL" {
+			newURL := getAppleMusicUrlFromYoutube(getYoutubeID(urls["youtube"]))
+			if newURL != "error getting appleMusic URL" && newURL != "" {
+				urls["apple"] = newURL
+				changed = true
+				updatedServices["apple"] = true
+			}
+		}
+		// Amazonから取得（まだエラーの場合）
+		if urls["apple"] == "error getting appleMusic URL" && urls["amazon"] != "error getting amazonMusic URL" {
+			newURL := getAppleMusicUrlFromAmazon(getTrackASIN(urls["amazon"]))
+			if newURL != "error getting appleMusic URL" && newURL != "" {
+				urls["apple"] = newURL
+				changed = true
+				updatedServices["apple"] = true
+			}
+		}
+		// Spotifyから取得（まだエラーの場合）
+		if urls["apple"] == "error getting appleMusic URL" && urls["spotify"] != "error getting spotify URL" {
+			newURL := getAppleMusicUrlFromSpotify(getSpotifyTrackID(urls["spotify"]))
+			if newURL != "error getting appleMusic URL" && newURL != "" {
+				urls["apple"] = newURL
+				changed = true
+				updatedServices["apple"] = true
+			}
+		}
+	}
+
+	return changed
+}
+
+// 更新されたサービスから他の失敗したサービスを再取得する
+func retryFromUpdatedServices(urls map[string]string, updatedServices map[string]bool) bool {
+	changed := false
+
+	// 一時的なアップデートサービス追跡用マップ (2次リトライ用)
+	tempUpdatedServices := make(map[string]bool)
+
+	// 更新されたサービスがある場合のみ処理を実行
+	if len(updatedServices) > 0 {
+		// YouTubeのリトライが必要な場合
+		if urls["youtube"] == "error getting youtubeMusic URL" {
+			retry := retryYouTubeURL(urls, tempUpdatedServices)
+			changed = changed || retry
+		}
+
+		// Amazonのリトライが必要な場合
+		if urls["amazon"] == "error getting amazonMusic URL" {
+			retry := retryAmazonURL(urls, tempUpdatedServices)
+			changed = changed || retry
+		}
+
+		// Spotifyのリトライが必要な場合
+		if urls["spotify"] == "error getting spotify URL" {
+			retry := retrySpotifyURL(urls, tempUpdatedServices)
+			changed = changed || retry
+		}
+
+		// Apple Musicのリトライが必要な場合
+		if urls["apple"] == "error getting appleMusic URL" {
+			retry := retryAppleMusicURL(urls, tempUpdatedServices)
+			changed = changed || retry
+		}
+	}
+
+	return changed
 }
 
 // This function will be called (due to AddHandler above) every time a new
