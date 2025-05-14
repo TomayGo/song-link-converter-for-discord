@@ -514,8 +514,16 @@ func getURLsFromService(sourceType string, sourceID string) map[string]string {
 		urls["amazon"] = getAmazonUrlFromAppleMusic(sourceID)
 	}
 
-	// Retry fetching URLs from alternative services when primary fetch fails
-	retryFromOtherService(urls)
+	// エラーがある場合のみリトライ処理を実行
+	hasError := strings.Contains(urls["youtube"], "error getting") || 
+		strings.Contains(urls["amazon"], "error getting") || 
+		strings.Contains(urls["spotify"], "error getting") || 
+		strings.Contains(urls["apple"], "error getting")
+	
+	if hasError {
+		// Retry fetching URLs from alternative services when primary fetch fails
+		retryFromOtherService(urls)
+	}
 
 	return urls
 }
