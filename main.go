@@ -449,14 +449,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				sourceID = getSpotifyTrackID(effectiveURL)
 			} else {
 				fmt.Printf("Console: Could not resolve spotify.link: %s\n", currentInputURL)
-				failedServicesMessages = append(failedServicesMessages, fmt.Sprintf("error getting Spotify Link (%s): 短縮URLの解決に失敗しました。", currentInputURL))
+				failedServicesMessages = append(failedServicesMessages, fmt.Sprintf("error getting Spotify Link (%s): Failed to resolve shortened URL.", currentInputURL))
 				continue
 			}
 		} else if strings.Contains(currentInputURL, "open.spotify.com") {
 			sourceType = serviceSpotify
 			sourceID = getSpotifyTrackID(currentInputURL)
 			effectiveURL = currentInputURL
-		} else if strings.Contains(currentInputURL, "music.youtube.com/") || strings.Contains(currentInputURL, "youtube.com/watch") || strings.Contains(currentInputURL, "youtu.be/") {
+		} else if strings.Contains(currentInputURL, "music.youtube.com/") {
 			sourceType = serviceYoutube
 			sourceID = getYoutubeID(currentInputURL)
 			effectiveURL = currentInputURL
@@ -515,7 +515,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					fmt.Printf("Console: Failed to get URL for %s from source %s (ID: %s): %s\n", targetType, sourceType, sourceID, rawError)
 				}
 			} else if !ok {
-				rawError := fmt.Sprintf("error getting %s: 情報を取得できませんでした（内部エラー、ターゲット未検出）。", strings.Title(targetType))
+				rawError := fmt.Sprintf("error getting %s: Failed to retrieve information (internal error, target not found).", strings.Title(targetType))
 				failedServicesMessages = append(failedServicesMessages, rawError)
 				fmt.Printf("Console: Target service %s not found in retrieved URLs map for source %s (ID: %s)\n", targetType, sourceType, sourceID)
 			}
@@ -551,7 +551,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			if len(messageParts) > 0 {
 				messageParts = append(messageParts, "\n") // Add a separator if there were successful URLs
 			}
-			messageParts = append(messageParts, "以下のサービスは取得できませんでした：")
+			messageParts = append(messageParts, "The following services could not be retrieved:")
 			messageParts = append(messageParts, strings.Join(uniqueFailedMessages, "\n"))
 		}
 	}
