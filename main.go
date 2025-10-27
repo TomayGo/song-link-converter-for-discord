@@ -102,6 +102,12 @@ const (
 	serviceApple   = "apple"
 )
 
+// Content type identifiers
+const (
+	contentTypeTrack = "song" // song.link APIはtrackではなくsongを使用
+	contentTypeAlbum = "album"
+)
+
 // Map service identifiers to their corresponding Platform type for song.link API
 var serviceToPlatform = map[string]Platform{
 	serviceSpotify: Spotify,
@@ -110,11 +116,17 @@ var serviceToPlatform = map[string]Platform{
 	serviceApple:   AppleMusic, // or Itunes, depending on song.link's mood
 }
 
-// serviceIDGetters maps a service identifier to a function that extracts the ID from a URL.
-var serviceIDGetters = map[string]func(string) string{
-	serviceSpotify: getSpotifyTrackID,
+// ContentInfo holds information about the content type and ID
+type ContentInfo struct {
+	contentType string
+	id          string
+}
+
+// serviceIDGetters maps a service identifier to a function that extracts the content type and ID from a URL.
+var serviceIDGetters = map[string]func(string) ContentInfo{
+	serviceSpotify: getSpotifyID,
 	serviceYoutube: getYoutubeID,
-	serviceAmazon:  getTrackASIN,
+	serviceAmazon:  getAmazonID,
 	serviceApple:   getAppleMusicID,
 }
 
@@ -170,7 +182,7 @@ func multipleUrl2SingleUrl(m string) []string {
 // sourceType: The service of the source ID (e.g., "spotify")
 // sourceID: The ID of the song/track on the source service.
 // targetServiceType: The desired target service (e.g., "youtube")
-func fetchMusicURL(sourceType string, sourceID string, targetServiceType string) string {
+func fetchMusicURL(sourceType string, contentInfo ContentInfo, targetServiceType string) string {
 	sourcePlatform, ok := serviceToPlatform[sourceType]
 	if !ok {
 		errMsg := fmt.Sprintf("error: unknown source service type for platform mapping: %s", sourceType)
@@ -186,25 +198,29 @@ func fetchMusicURL(sourceType string, sourceID string, targetServiceType string)
 	}
 
 	// Use "JP" as userCountry, can be parameterized if needed.
-	url := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?platform=%s&type=song&id=%s&userCountry=JP&songIfSingle=true", sourcePlatform, sourceID)
+	url := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?platform=%s&type=%s&id=%s&userCountry=JP&songIfSingle=true",
+		sourcePlatform, contentInfo.contentType, contentInfo.id)
 
 	resp, err := http.Get(url)
 	if err != nil {
-		errMsg := fmt.Sprintf("error getting %s URL (http error for source %s, id %s): %v", targetServiceType, sourceType, sourceID, err)
+		errMsg := fmt.Sprintf("error getting %s URL (http error for source %s, type %s, id %s): %v",
+			targetServiceType, sourceType, contentInfo.contentType, contentInfo.id, err)
 		fmt.Println(errMsg) // Console output
 		return errMsg
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		errMsg := fmt.Sprintf("error getting %s URL (status %d for source %s, id %s)", targetServiceType, resp.StatusCode, sourceType, sourceID)
+		errMsg := fmt.Sprintf("error getting %s URL (status %d for source %s, type %s, id %s)",
+			targetServiceType, resp.StatusCode, sourceType, contentInfo.contentType, contentInfo.id)
 		fmt.Println(errMsg) // Console output
 		return errMsg
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		errMsg := fmt.Sprintf("error getting %s URL (read body error for source %s, id %s): %v", targetServiceType, sourceType, sourceID, err)
+		errMsg := fmt.Sprintf("error getting %s URL (read body error for source %s, type %s, id %s): %v",
+			targetServiceType, sourceType, contentInfo.contentType, contentInfo.id, err)
 		fmt.Println(errMsg) // Console output
 		return errMsg
 	}
@@ -217,11 +233,13 @@ func fetchMusicURL(sourceType string, sourceID string, targetServiceType string)
 			Code    int    `json:"code"`
 		}
 		if json.Unmarshal(body, &errorResponse) == nil && errorResponse.Message != "" {
-			errMsg := fmt.Sprintf("error getting %s URL (api error %d for source %s, id %s: %s)", targetServiceType, errorResponse.Code, sourceType, sourceID, errorResponse.Message)
+			errMsg := fmt.Sprintf("error getting %s URL (api error %d for source %s, type %s, id %s: %s)",
+				targetServiceType, errorResponse.Code, sourceType, contentInfo.contentType, contentInfo.id, errorResponse.Message)
 			fmt.Println(errMsg) // Console output
 			return errMsg
 		}
-		errMsg := fmt.Sprintf("error getting %s URL (unmarshal error for source %s, id %s): %v. Body: %s", targetServiceType, sourceType, sourceID, err, string(body))
+		errMsg := fmt.Sprintf("error getting %s URL (unmarshal error for source %s, type %s, id %s): %v. Body: %s",
+			targetServiceType, sourceType, contentInfo.contentType, contentInfo.id, err, string(body))
 		fmt.Println(errMsg) // Console output
 		return errMsg
 	}
@@ -232,7 +250,8 @@ func fetchMusicURL(sourceType string, sourceID string, targetServiceType string)
 			linkData, exists = response.LinksByPlatform[Itunes]
 		}
 		if !exists {
-			errMsg := fmt.Sprintf("error getting %s URL (%s link not found in API response for source %s, id %s)", targetServiceType, targetPlatform, sourceType, sourceID)
+			errMsg := fmt.Sprintf("error getting %s URL (%s link not found in API response for source %s, type %s, id %s)",
+				targetServiceType, targetPlatform, sourceType, contentInfo.contentType, contentInfo.id)
 			fmt.Println(errMsg) // Console output
 			return errMsg
 		}
@@ -281,12 +300,12 @@ func retryFromOtherService(urls map[string]string, initialSourceType string) {
 					continue
 				}
 
-				newSourceID := idExtractor(potentialNewSourceURL)
-				if newSourceID == "" {
+				newContentInfo := idExtractor(potentialNewSourceURL)
+				if newContentInfo.id == "" {
 					continue
 				}
 
-				fetchedURL := fetchMusicURL(potentialNewSourceType, newSourceID, targetServiceToFix)
+				fetchedURL := fetchMusicURL(potentialNewSourceType, newContentInfo, targetServiceToFix)
 
 				if !strings.HasPrefix(fetchedURL, "error getting") && fetchedURL != "" {
 					urls[targetServiceToFix] = fetchedURL
@@ -304,7 +323,7 @@ func retryFromOtherService(urls map[string]string, initialSourceType string) {
 }
 
 // getURLsFromService orchestrates fetching URLs for related services.
-func getURLsFromService(sourceType string, sourceID string) map[string]string {
+func getURLsFromService(sourceType string, contentInfo ContentInfo) map[string]string {
 	urls := make(map[string]string)
 	targetServiceTypes, ok := serviceRelationship[sourceType]
 	if !ok {
@@ -313,7 +332,7 @@ func getURLsFromService(sourceType string, sourceID string) map[string]string {
 	}
 
 	for _, targetType := range targetServiceTypes {
-		url := fetchMusicURL(sourceType, sourceID, targetType)
+		url := fetchMusicURL(sourceType, contentInfo, targetType)
 		urls[targetType] = url
 	}
 
@@ -382,44 +401,59 @@ func convertSpotifyLink2OpenSpotifyCom(shortURL string) string {
 	return ""
 }
 
-func getSpotifyTrackID(spotifyURL string) string {
-	re := regexp.MustCompile(`track/(\w+)`)
-	matches := re.FindStringSubmatch(spotifyURL)
-	if len(matches) >= 2 {
-		return matches[1]
+func getSpotifyID(spotifyURL string) ContentInfo {
+	trackRe := regexp.MustCompile(`track/(\w+)`)
+	albumRe := regexp.MustCompile(`album/(\w+)`)
+
+	if matches := trackRe.FindStringSubmatch(spotifyURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeTrack, id: matches[1]}
 	}
-	return ""
+	if matches := albumRe.FindStringSubmatch(spotifyURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeAlbum, id: matches[1]}
+	}
+	return ContentInfo{}
 }
 
-func getYoutubeID(youtubeURL string) string {
-	re := regexp.MustCompile(`(?:v=|youtu\.be/|embed/|shorts/)([a-zA-Z0-9_-]{11})`)
-	matches := re.FindStringSubmatch(youtubeURL)
-	if len(matches) >= 2 {
-		return matches[1]
+func getYoutubeID(youtubeURL string) ContentInfo {
+	// 曲のID抽出
+	trackRe := regexp.MustCompile(`(?:v=|youtu\.be/|embed/|shorts/)([a-zA-Z0-9_-]{11})`)
+	if matches := trackRe.FindStringSubmatch(youtubeURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeTrack, id: matches[1]}
 	}
-	return ""
+
+	// プレイリスト（アルバム）のID抽出
+	playlistRe := regexp.MustCompile(`playlist\?list=([A-Za-z0-9_-]+)`)
+	if matches := playlistRe.FindStringSubmatch(youtubeURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeAlbum, id: matches[1]}
+	}
+
+	return ContentInfo{}
 }
 
-func getTrackASIN(amazonURL string) string {
-	re := regexp.MustCompile(`trackAsin=([A-Z0-9]{10})`)
-	matches := re.FindStringSubmatch(amazonURL)
-	if len(matches) >= 2 {
-		return matches[1]
+func getAmazonID(amazonURL string) ContentInfo {
+	trackRe := regexp.MustCompile(`trackAsin=([A-Z0-9]{10})`)
+	albumRe := regexp.MustCompile(`(?:albums|dp)/([A-Z0-9]{10})`)
+
+	if matches := trackRe.FindStringSubmatch(amazonURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeTrack, id: matches[1]}
 	}
-	reAlbum := regexp.MustCompile(`(?:albums|dp)/([A-Z0-9]{10})`)
-	matchesAlbum := reAlbum.FindStringSubmatch(amazonURL)
-	if len(matchesAlbum) >= 2 {
+	if matches := albumRe.FindStringSubmatch(amazonURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeAlbum, id: matches[1]}
 	}
-	return ""
+	return ContentInfo{}
 }
 
-func getAppleMusicID(appleMusicURL string) string {
-	re := regexp.MustCompile(`\?i=(\d+)`)
-	matches := re.FindStringSubmatch(appleMusicURL)
-	if len(matches) >= 2 {
-		return matches[1]
+func getAppleMusicID(appleMusicURL string) ContentInfo {
+	trackRe := regexp.MustCompile(`\?i=(\d+)`)
+	albumRe := regexp.MustCompile(`album/[^/]+/(\d+)`)
+
+	if matches := trackRe.FindStringSubmatch(appleMusicURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeTrack, id: matches[1]}
 	}
-	return ""
+	if matches := albumRe.FindStringSubmatch(appleMusicURL); len(matches) >= 2 {
+		return ContentInfo{contentType: contentTypeAlbum, id: matches[1]}
+	}
+	return ContentInfo{}
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -439,14 +473,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		var effectiveURL = currentInputURL
 		var sourceType string
-		var sourceID string
+		var contentInfo ContentInfo
 
 		if strings.Contains(currentInputURL, "spotify.link") {
 			resolvedSpotifyURL := convertSpotifyLink2OpenSpotifyCom(currentInputURL)
 			if resolvedSpotifyURL != "" {
 				effectiveURL = resolvedSpotifyURL
 				sourceType = serviceSpotify
-				sourceID = getSpotifyTrackID(effectiveURL)
+				contentInfo = getSpotifyID(effectiveURL)
 			} else {
 				fmt.Printf("Console: Could not resolve spotify.link: %s\n", currentInputURL)
 				failedServicesMessages = append(failedServicesMessages, fmt.Sprintf("error getting Spotify Link (%s): Failed to resolve shortened URL.", currentInputURL))
@@ -454,25 +488,25 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		} else if strings.Contains(currentInputURL, "open.spotify.com") {
 			sourceType = serviceSpotify
-			sourceID = getSpotifyTrackID(currentInputURL)
+			contentInfo = getSpotifyID(currentInputURL)
 			effectiveURL = currentInputURL
 		} else if strings.Contains(currentInputURL, "music.youtube.com/") {
 			sourceType = serviceYoutube
-			sourceID = getYoutubeID(currentInputURL)
+			contentInfo = getYoutubeID(currentInputURL)
 			effectiveURL = currentInputURL
 		} else if strings.Contains(currentInputURL, "music.amazon.") {
 			sourceType = serviceAmazon
-			sourceID = getTrackASIN(currentInputURL)
+			contentInfo = getAmazonID(currentInputURL)
 			effectiveURL = currentInputURL
 		} else if strings.Contains(currentInputURL, "music.apple.com/") {
 			sourceType = serviceApple
-			sourceID = getAppleMusicID(currentInputURL)
+			contentInfo = getAppleMusicID(currentInputURL)
 			effectiveURL = currentInputURL
 		} else {
 			continue
 		}
 
-		if sourceID == "" {
+		if contentInfo.id == "" {
 			fmt.Printf("Console: Could not extract ID from URL: %s (Service Type: %s)\n", currentInputURL, sourceType)
 			failedServicesMessages = append(failedServicesMessages, fmt.Sprintf("error getting %s ID from URL (%s): ID抽出失敗", strings.Title(sourceType), currentInputURL))
 			continue
@@ -483,7 +517,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 		processedSourceURLs[effectiveURL] = true
 
-		retrievedServiceURLs := getURLsFromService(sourceType, sourceID)
+		retrievedServiceURLs := getURLsFromService(sourceType, contentInfo)
 
 		targetServiceTypes := serviceRelationship[sourceType]
 		for _, targetType := range targetServiceTypes {
@@ -512,12 +546,12 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 					if isNewError {
 						failedServicesMessages = append(failedServicesMessages, rawError)
 					}
-					fmt.Printf("Console: Failed to get URL for %s from source %s (ID: %s): %s\n", targetType, sourceType, sourceID, rawError)
+					fmt.Printf("Console: Failed to get URL for %s from source %s (ID: %s): %s\n", targetType, sourceType, contentInfo.id, rawError)
 				}
 			} else if !ok {
 				rawError := fmt.Sprintf("error getting %s: Failed to retrieve information (internal error, target not found).", strings.Title(targetType))
 				failedServicesMessages = append(failedServicesMessages, rawError)
-				fmt.Printf("Console: Target service %s not found in retrieved URLs map for source %s (ID: %s)\n", targetType, sourceType, sourceID)
+				fmt.Printf("Console: Target service %s not found in retrieved URLs map for source %s (ID: %s)\n", targetType, sourceType, contentInfo.id)
 			}
 		}
 	}
