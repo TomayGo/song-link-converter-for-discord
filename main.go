@@ -178,94 +178,117 @@ func multipleUrl2SingleUrl(m string) []string {
 	return regexp.MustCompile(`\r\n|\n`).Split(m, -1)
 }
 
-// fetchMusicURL fetches a music URL from song.link API.
-// sourceType: The service of the source ID (e.g., "spotify")
-// sourceID: The ID of the song/track on the source service.
-// targetServiceType: The desired target service (e.g., "youtube")
-func fetchMusicURL(sourceType string, contentInfo ContentInfo, targetServiceType string) string {
+// fetchAllMusicURLs fetches URLs for all related services in a single API call.
+// Returns a map of targetServiceType -> URL. Error values start with "error getting".
+func fetchAllMusicURLs(sourceType string, contentInfo ContentInfo) map[string]string {
+	results := make(map[string]string)
+
 	sourcePlatform, ok := serviceToPlatform[sourceType]
 	if !ok {
-		errMsg := fmt.Sprintf("error: unknown source service type for platform mapping: %s", sourceType)
-		fmt.Println(errMsg) // Console output
-		return errMsg
+		fmt.Printf("error: unknown source service type for platform mapping: %s\n", sourceType)
+		return results
 	}
 
-	targetPlatform, ok := serviceToPlatform[targetServiceType]
+	targetServiceTypes, ok := serviceRelationship[sourceType]
 	if !ok {
-		errMsg := fmt.Sprintf("error: unknown target service type for platform mapping: %s", targetServiceType)
-		fmt.Println(errMsg) // Console output
-		return errMsg
+		return results
 	}
 
 	// Use "JP" as userCountry, can be parameterized if needed.
-	url := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?platform=%s&type=%s&id=%s&userCountry=JP&songIfSingle=true",
+	apiURL := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?platform=%s&type=%s&id=%s&userCountry=JP&songIfSingle=true",
 		sourcePlatform, contentInfo.contentType, contentInfo.id)
-
-	resp, err := http.Get(url)
+	fmt.Printf(apiURL + "\n") // Console output for debugging
+	resp, err := http.Get(apiURL)
 	if err != nil {
-		errMsg := fmt.Sprintf("error getting %s URL (http error for source %s, type %s, id %s): %v",
-			targetServiceType, sourceType, contentInfo.contentType, contentInfo.id, err)
-		fmt.Println(errMsg) // Console output
-		return errMsg
+		for _, targetType := range targetServiceTypes {
+			errMsg := fmt.Sprintf("error getting %s URL (http error for source %s, type %s, id %s): %v",
+				targetType, sourceType, contentInfo.contentType, contentInfo.id, err)
+			fmt.Println(errMsg) // Console output
+			results[targetType] = errMsg
+		}
+		return results
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		errMsg := fmt.Sprintf("error getting %s URL (status %d for source %s, type %s, id %s)",
-			targetServiceType, resp.StatusCode, sourceType, contentInfo.contentType, contentInfo.id)
-		fmt.Println(errMsg) // Console output
-		return errMsg
+		for _, targetType := range targetServiceTypes {
+			errMsg := fmt.Sprintf("error getting %s URL (status %d for source %s, type %s, id %s)",
+				targetType, resp.StatusCode, sourceType, contentInfo.contentType, contentInfo.id)
+			fmt.Println(errMsg) // Console output
+			results[targetType] = errMsg
+		}
+		return results
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		errMsg := fmt.Sprintf("error getting %s URL (read body error for source %s, type %s, id %s): %v",
-			targetServiceType, sourceType, contentInfo.contentType, contentInfo.id, err)
-		fmt.Println(errMsg) // Console output
-		return errMsg
+		for _, targetType := range targetServiceTypes {
+			errMsg := fmt.Sprintf("error getting %s URL (read body error for source %s, type %s, id %s): %v",
+				targetType, sourceType, contentInfo.contentType, contentInfo.id, err)
+			fmt.Println(errMsg) // Console output
+			results[targetType] = errMsg
+		}
+		return results
 	}
 
 	var response Response
-	err = json.Unmarshal(body, &response)
-	if err != nil {
+	if err = json.Unmarshal(body, &response); err != nil {
 		var errorResponse struct {
 			Message string `json:"message"`
 			Code    int    `json:"code"`
 		}
-		if json.Unmarshal(body, &errorResponse) == nil && errorResponse.Message != "" {
-			errMsg := fmt.Sprintf("error getting %s URL (api error %d for source %s, type %s, id %s: %s)",
-				targetServiceType, errorResponse.Code, sourceType, contentInfo.contentType, contentInfo.id, errorResponse.Message)
+		apiErr := json.Unmarshal(body, &errorResponse) == nil && errorResponse.Message != ""
+		for _, targetType := range targetServiceTypes {
+			var errMsg string
+			if apiErr {
+				errMsg = fmt.Sprintf("error getting %s URL (api error %d for source %s, type %s, id %s: %s)",
+					targetType, errorResponse.Code, sourceType, contentInfo.contentType, contentInfo.id, errorResponse.Message)
+			} else {
+				errMsg = fmt.Sprintf("error getting %s URL (unmarshal error for source %s, type %s, id %s): %v. Body: %s",
+					targetType, sourceType, contentInfo.contentType, contentInfo.id, err, string(body))
+			}
 			fmt.Println(errMsg) // Console output
-			return errMsg
+			results[targetType] = errMsg
 		}
-		errMsg := fmt.Sprintf("error getting %s URL (unmarshal error for source %s, type %s, id %s): %v. Body: %s",
-			targetServiceType, sourceType, contentInfo.contentType, contentInfo.id, err, string(body))
-		fmt.Println(errMsg) // Console output
-		return errMsg
+		return results
 	}
 
-	linkData, exists := response.LinksByPlatform[targetPlatform]
-	if !exists {
-		if targetPlatform == AppleMusic {
-			linkData, exists = response.LinksByPlatform[Itunes]
+	for _, targetServiceType := range targetServiceTypes {
+		targetPlatform, ok := serviceToPlatform[targetServiceType]
+		if !ok {
+			errMsg := fmt.Sprintf("error: unknown target service type for platform mapping: %s", targetServiceType)
+			fmt.Println(errMsg) // Console output
+			results[targetServiceType] = errMsg
+			continue
 		}
+
+		linkData, exists := response.LinksByPlatform[targetPlatform]
 		if !exists {
-			errMsg := fmt.Sprintf("error getting %s URL (%s link not found in API response for source %s, type %s, id %s)",
-				targetServiceType, targetPlatform, sourceType, contentInfo.contentType, contentInfo.id)
-			fmt.Println(errMsg) // Console output
-			return errMsg
+			if targetPlatform == AppleMusic {
+				linkData, exists = response.LinksByPlatform[Itunes]
+			}
+			if !exists {
+				errMsg := fmt.Sprintf("error getting %s URL (%s link not found in API response for source %s, type %s, id %s)",
+					targetServiceType, targetPlatform, sourceType, contentInfo.contentType, contentInfo.id)
+				fmt.Println(errMsg) // Console output
+				results[targetServiceType] = errMsg
+				continue
+			}
 		}
+
+		finalURL := linkData.Url
+		if targetServiceType == serviceAmazon {
+			finalURL = strings.Replace(finalURL, ".com", ".co.jp", 1)
+		}
+		results[targetServiceType] = finalURL
 	}
 
-	finalURL := linkData.Url
-	if targetServiceType == serviceAmazon {
-		finalURL = strings.Replace(finalURL, ".com", ".co.jp", 1)
-	}
-	return finalURL
+	return results
 }
 
 // retryFromOtherService attempts to fetch URLs for services that failed in the initial attempt,
 // by using services that were successfully fetched as new sources.
+// Each successful source makes at most one API call per retry attempt.
 func retryFromOtherService(urls map[string]string, initialSourceType string) {
 	maxRetries := len(serviceRelationship[initialSourceType])
 	if maxRetries == 0 {
@@ -273,7 +296,6 @@ func retryFromOtherService(urls map[string]string, initialSourceType string) {
 	}
 
 	for retryAttempt := 0; retryAttempt < maxRetries; retryAttempt++ {
-		madeProgressInThisAttempt := false
 		servicesThatFailed := []string{}
 		successfulServices := make(map[string]string)
 
@@ -289,31 +311,31 @@ func retryFromOtherService(urls map[string]string, initialSourceType string) {
 			break
 		}
 
-		for _, targetServiceToFix := range servicesThatFailed {
-			for potentialNewSourceType, potentialNewSourceURL := range successfulServices {
-				if potentialNewSourceType == targetServiceToFix {
-					continue
+		madeProgressInThisAttempt := false
+		for potentialNewSourceType, potentialNewSourceURL := range successfulServices {
+			idExtractor, ok := serviceIDGetters[potentialNewSourceType]
+			if !ok {
+				continue
+			}
+
+			newContentInfo := idExtractor(potentialNewSourceURL)
+			if newContentInfo.id == "" {
+				continue
+			}
+
+			// 1 API call per source — covers all failed targets at once
+			fetchedURLs := fetchAllMusicURLs(potentialNewSourceType, newContentInfo)
+
+			for _, targetServiceToFix := range servicesThatFailed {
+				if !strings.HasPrefix(urls[targetServiceToFix], "error getting") {
+					continue // already fixed by a previous source
 				}
-
-				idExtractor, ok := serviceIDGetters[potentialNewSourceType]
-				if !ok {
-					continue
-				}
-
-				newContentInfo := idExtractor(potentialNewSourceURL)
-				if newContentInfo.id == "" {
-					continue
-				}
-
-				fetchedURL := fetchMusicURL(potentialNewSourceType, newContentInfo, targetServiceToFix)
-
-				if !strings.HasPrefix(fetchedURL, "error getting") && fetchedURL != "" {
+				fetchedURL, exists := fetchedURLs[targetServiceToFix]
+				if exists && !strings.HasPrefix(fetchedURL, "error getting") && fetchedURL != "" {
 					urls[targetServiceToFix] = fetchedURL
 					madeProgressInThisAttempt = true
-					goto nextFailedServiceLoop
 				}
 			}
-		nextFailedServiceLoop:
 		}
 
 		if !madeProgressInThisAttempt {
@@ -324,20 +346,13 @@ func retryFromOtherService(urls map[string]string, initialSourceType string) {
 
 // getURLsFromService orchestrates fetching URLs for related services.
 func getURLsFromService(sourceType string, contentInfo ContentInfo) map[string]string {
-	urls := make(map[string]string)
-	targetServiceTypes, ok := serviceRelationship[sourceType]
-	if !ok {
+	if _, ok := serviceRelationship[sourceType]; !ok {
 		fmt.Printf("Error: No defined relationship for source service type '%s'\n", sourceType)
-		return urls
+		return make(map[string]string)
 	}
 
-	for _, targetType := range targetServiceTypes {
-		url := fetchMusicURL(sourceType, contentInfo, targetType)
-		urls[targetType] = url
-	}
-
+	urls := fetchAllMusicURLs(sourceType, contentInfo)
 	retryFromOtherService(urls, sourceType)
-
 	return urls
 }
 
